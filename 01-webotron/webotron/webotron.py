@@ -22,5 +22,45 @@ def list_bucket_objects():
 		for obj in bucket.objects.all():
 			print('{0} bucket contains {1}'.format(obj.bucket_name,obj.key))
 
+
+@cli.command('configure-s3-bucket')
+@click.argument('bucket')
+def configure_s3_bucket(bucket):
+	"Configuring a bucket for website"
+	new_bucket = s3.create_bucket(Bucket=bucket)
+	new_bucket.upload_file('index.html','index.html', ExtraArgs={'ContentType':'text/html'})
+	policy = """
+	{
+	"Version": "2012-10-17",
+	"Statement": [
+	    {
+	        "Sid": "PublicReadGetObject",
+	        "Effect": "Allow",
+	        "Principal": "*",
+	        "Action": [
+	            "s3:GetObject"
+	        ],
+	        "Resource": [
+	            "arn:aws:s3:::%s/*"
+	        ]
+	    }
+	]
+	}""" %new_bucket.name
+	policy = policy.strip()
+	pol = new_bucket.Policy()
+	pol.put(Policy = policy)
+	web = new_bucket.Website()
+	web.put(WebsiteConfiguration={
+        'ErrorDocument': {
+            'Key': 'error.html'
+        },
+        'IndexDocument': {
+            'Suffix': 'index.html'
+        }})
+	return
+
+
+
+
 if __name__ == "__main__":
 	cli()
