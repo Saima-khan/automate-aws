@@ -1,13 +1,32 @@
 """Classes for S3 Bucket."""
 import mimetypes
 from pathlib import Path
-
+import util
+from hashlib import md5
+from functools import reduce
+import boto3
 
 class BucketManager:
     """Class to Manage Bucket."""
+
+    CHUNK_SIZE = 8388608
     def __init__(self,session):
         """Create a BucketManger Obect."""
         self.s3 = session.resource('s3')
+        self.manifest = {}
+        self.transfer_config = boto3.s3.transfer.TransferConfig(
+            multipart_chunksize = self.CHUNK_SIZE,
+            multipart_threshold = self.CHUNK_SIZE
+        )
+
+    def get_region_name(self,bucket):
+        """Get the bucket's region"""
+        bucket_location = self.s3.meta.client.get_bucket_location(Bucket=bucket.name)
+        return bucket_location["LocationConstraint"] or 'us-east-1'
+
+    def get_bucket_url(self,bucket):
+        """Get the url for s3 bucket"""
+        return "http://{}.{}".format(bucket.name,util.get_endpoint(self.get_region_name(bucket)).host)
 
     def all_buckets(self):
         """Return all bucket objects."""
@@ -59,17 +78,61 @@ class BucketManager:
                 'Suffix': 'index.html'
             }})
 
-    @staticmethod
-    def upload_file(path,key,bucket):
+    def upload_file(self,path,key,bucket):
         """Uploads file to s3 bucket."""
         content_type = mimetypes.guess_type(key)[0] or 'text/plain'
+
+        etag = self.generate_etag(path)
+        if self.manifest.get(key, ' ') == etag:
+            print("Skipping {}, etags match".format(key))
+            return
+
         return bucket.upload_file(path,key,
                     ExtraArgs={
-                    'ContentType' : content_type})
+                    'ContentType' : content_type},
+                    Config=self.transfer_config
+                    )
+
+    @staticmethod
+    def hash_data(data):
+        hash = md5()
+        hash.update(data)
+
+        return hash
+
+    def generate_etag(self,path):
+        """Generates the etag for a file"""
+        hashes = []
+
+        with open(path,'rb') as f:
+            while True:
+                data = f.read(self.CHUNK_SIZE)
+                if not data:
+                    break
+
+                hashes.append(self.hash_data(data))
+            if not hashes:
+                return
+            elif len(hashes) == 1:
+                return '"{}"'.format(hashes[0].hexdigest())
+            else:
+                digests = (h.digest() for h in hashes)
+                hash = self.hash_data(reduce(lambda x, y: x + y, digests))
+                return '"{}-{}"'.format(hash.hexdigest(), len(hashes))
+
+
+    def load_manifest(self,bucket):
+        paginator = self.s3.meta.client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket.name):
+            for obj in page.get('Contents',[]):
+                self.manifest[obj['Key']]=obj['ETag']
+
 
     def sync(self,pathname,bucket):
         """Syncs the file to bucket."""
         bucket_name = self.s3.Bucket(bucket)
+        self.load_manifest(bucket_name)
+
         root = Path(pathname).expanduser().resolve()
         def handle_directory(target):
             for path in target.iterdir():

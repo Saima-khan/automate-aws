@@ -52,6 +52,7 @@ def configure_s3_bucket(bucket):
 def sync(pathname,bucket):
     """Syncs contents of PATHNAME to BUCKET"""
     bucket_manager.sync(pathname,bucket)
+    print("Bucket URL: {}".format(bucket_manager.get_bucket_url(bucket_manager.s3.Bucket(bucket))))
 
 
 
