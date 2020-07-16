@@ -1,5 +1,6 @@
 *.pem
 02-notifon/config.dev.json
+02-notifon/notifier/node_modules/
 # Distribution / packaging
 .Python
 env/
