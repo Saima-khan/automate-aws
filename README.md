@@ -10,3 +10,9 @@ Currently has following features:
 3. Apply a policy to bucket and create a bucket
 4. Upload files to s3 bucket
 5. profile specified
+
+#02-notifon
+A script to notify on slack users when changes made to AWS Account using CloudWatch Events
+
+##Features
+Currently has following features
