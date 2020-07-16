@@ -1,9 +1,8 @@
 # coding: utf-8
 import boto3
-session = boto3.Session('ec2')
+
 session = boto3.Session(profile_name = 'pythonAutomation')
-ec2 = session.resource('ec2')
-as_client = boto3.client('autoscaling')
+
 as_client = session.client('autoscaling')
 as_client.describe_auto_scaling_groups()
 as_client.describe_policies()
